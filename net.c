@@ -80,7 +80,7 @@ static int net_device_close(struct net_device *dev)
 int net_device_output(struct net_device *dev, uint16_t type, const uint8_t *data, size_t len, const void *dst)
 {
 
-    if (NET_DEVICE_IS_UP(dev))
+    if (!NET_DEVICE_IS_UP(dev))
     {
         errorf("not opened, dev=%s", dev->name);
         return -1;
