@@ -1,10 +1,12 @@
 APPS = 
 
-DRIVERS = 
+DRIVERS = driver/dummy.o
 
 OBJS = util.o \
+	   net.o \
 
 TESTS = test/step0.exe \
+		test/step1.exe \
 
 CFLAGS := $(CFLAGS) -g -W -Wall -Wno-unused-parameter -iquote .
 
@@ -15,6 +17,8 @@ ifeq ($(shell uname),Linux)
 endif
 
 ifeq ($(shell uname),Darwin)
+  BASE = platform/linux
+  CFLAGS := $(CFLAGS) -pthread -iquote $(BASE)
   # macOS specific settings
 endif
 
@@ -38,5 +42,6 @@ clean:
 	rm -rf $(APPS) $(APPS:.exe=.o) $(OBJS) $(DRIVERS) $(TESTS) $(TESTS:.exe=.o)
 
 dev:
+	make clean
 	docker build . -t microps
 	docker run --privileged -it microps
