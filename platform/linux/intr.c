@@ -6,12 +6,13 @@
 #include "platform.h"
 
 #include "util.h"
+#include "net.h"
 
 struct irq_entry
 {
     struct irq_entry *next;
     unsigned int irq;
-    int (*hander)(unsigned int irq, void *dev);
+    int (*handler)(unsigned int irq, void *dev);
     int flags;
     char name[16];
     void *dev;
@@ -24,7 +25,7 @@ static sigset_t sigmask;
 static pthread_t tid;
 static pthread_barrier_t barrier;
 
-int intr_request_irq(unsigned int irq, int (*hander)(unsigned int irq, void *dev), int flags, const char *name, void *dev)
+int intr_request_irq(unsigned int irq, int (*handler)(unsigned int irq, void *dev), int flags, const char *name, void *dev)
 {
     struct irq_entry *entry;
     debugf("irq=%u, flag=%d, name=%s", irq, flags, name);
@@ -48,7 +49,7 @@ int intr_request_irq(unsigned int irq, int (*hander)(unsigned int irq, void *dev
     }
 
     entry->irq = irq;
-    entry->hander = hander;
+    entry->handler = handler;
     entry->flags = flags;
     strncpy(entry->name, name, sizeof(entry->name) - 1);
     entry->dev = dev;
@@ -85,13 +86,17 @@ static void *intr_thread(void *arg)
             terminate = 1;
             break;
 
+        case SIGUSR1:
+            net_softirq_handler();
+            break;
+
         default:
             for (entry = irqs; entry; entry = entry->next)
             {
                 if (entry->irq == (unsigned int)sig)
                 {
                     debugf("irq=%d, name=%s", entry->irq, entry->name);
-                    entry->hander(entry->irq, entry->dev);
+                    entry->handler(entry->irq, entry->dev);
                 }
             }
             break;
@@ -138,5 +143,6 @@ int intr_init(void)
     pthread_barrier_init(&barrier, NULL, 2);
     sigemptyset(&sigmask);
     sigaddset(&sigmask, SIGHUP);
+    sigaddset(&sigmask, SIGUSR1);
     return 0;
 }

@@ -27,6 +27,7 @@ memory_free(void *ptr)
  */
 
 #define INTR_IRQ_BASE (SIGRTMIN + 1)
+#define INTR_IRQ_SOFTIRQ SIGUSR1
 
 #define INTR_IRQ_SHARED 0x0001
 
