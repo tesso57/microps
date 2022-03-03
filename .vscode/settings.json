@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "net.h": "c",
+        "platform.h": "c",
+        "stdlib.h": "c",
+        "pthread.h": "c"
+    }
+}
