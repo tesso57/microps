@@ -24,9 +24,11 @@ struct net_protocol_queue_entry
     uint8_t data[];
 };
 
+// 各種リスト
 static struct net_device *devices;
 static struct net_protocol *protocols;
 
+//　デバイス構造体のメモリを確保
 struct net_device *net_device_alloc(void)
 {
     struct net_device *dev;
@@ -40,26 +42,30 @@ struct net_device *net_device_alloc(void)
     return dev;
 }
 
+//デバイスを登録
 int net_device_register(struct net_device *dev)
 {
+    // indexはstaticで内部保存
     static unsigned int index = 0;
-
-    dev->index = index++;
-    snprintf(dev->name, sizeof(dev->name), "net%d", dev->index);
-    dev->next = devices;
-    devices = dev;
+    dev->index = index++;                                        // indexを決定
+    snprintf(dev->name, sizeof(dev->name), "net%d", dev->index); //デバイス名を生成
+    dev->next = devices;                                         //デバイスリストの先頭に追加
+    devices = dev;                                               //デバイスリストの先頭に追加
     infof("registered, dev=%s, type=0x%04x", dev->name, dev->type);
     return 0;
 }
 
+// ネットデバイスの利用を開始
 static int net_device_open(struct net_device *dev)
 {
+    // デバイスの状態を確認
     if (NET_DEVICE_IS_UP(dev))
     {
         errorf("already opened, dev=%s", dev->name);
         return -1;
     }
 
+    // open関数があれば利用。
     if (dev->ops->open)
     {
         if (dev->ops->open(dev) == -1)
@@ -68,6 +74,7 @@ static int net_device_open(struct net_device *dev)
             return -1;
         }
     }
+    // UP フラグを立てる.
     dev->flags |= NET_DEVICE_FLAG_UP;
     infof("dev=%s, state=%s", dev->name, NET_DEVICE_STATE(dev));
     return 0;
@@ -75,13 +82,14 @@ static int net_device_open(struct net_device *dev)
 
 static int net_device_close(struct net_device *dev)
 {
-
+    // デバイスの状態を確認
     if (!NET_DEVICE_IS_UP(dev))
     {
         errorf("not opened, dev=%s", dev->name);
         return -1;
     }
 
+    // close関数があれば利用
     if (dev->ops->close)
     {
         if (dev->ops->close(dev) == -1)
@@ -90,7 +98,7 @@ static int net_device_close(struct net_device *dev)
             return -1;
         }
     }
-    dev->flags &= ~NET_DEVICE_FLAG_UP;
+    dev->flags &= ~NET_DEVICE_FLAG_UP; // UP フラグを落とす
     infof("dev=%s, state=%s", dev->name, NET_DEVICE_STATE(dev));
     return 0;
 }
@@ -127,15 +135,18 @@ struct net_iface *net_device_get_iface(struct net_device *dev, int family)
     return entry;
 }
 
+//デバイスへの出力
 int net_device_output(struct net_device *dev, uint16_t type, const uint8_t *data, size_t len, const void *dst)
 {
 
+    //デバイスの状態を確認
     if (!NET_DEVICE_IS_UP(dev))
     {
         errorf("not opened, dev=%s", dev->name);
         return -1;
     }
 
+    //データのサイズを確認 （MTUは上位の層によって調節済み）
     if (len > dev->mtu)
     {
         errorf("too long, dev=%s, mtu=%u, len=%zu", dev->name, dev->mtu, len);
@@ -144,6 +155,8 @@ int net_device_output(struct net_device *dev, uint16_t type, const uint8_t *data
 
     debugf("dev=%s, type=0x%04x, len=%zu", dev->name, type, len);
     debugdump(data, len);
+
+    // transmit関数を利用
     if (dev->ops->transmit(dev, type, data, len, dst) == -1)
     {
         errorf("device transmit failure, dev=%s, len=%zu", dev->name, len);
@@ -178,6 +191,7 @@ int net_protocol_register(uint16_t type, void (*handler)(const uint8_t *data, si
     return 0;
 }
 
+// デバイスからの入力
 int net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net_device *dev)
 {
     struct net_protocol *proto;
@@ -233,6 +247,7 @@ int net_softirq_handler(void)
     return 0;
 }
 
+//プロトコルスタックの起動
 int net_run(void)
 {
     struct net_device *dev;
@@ -242,6 +257,7 @@ int net_run(void)
         return -1;
     }
 
+    // 登録済みのデバイスをオープン
     debugf("open all devices...");
     for (dev = devices; dev; dev = dev->next)
     {
@@ -251,10 +267,12 @@ int net_run(void)
     return 0;
 }
 
+//プロトコルスタックの停止
 void net_shutdown(void)
 {
     struct net_device *dev;
 
+    // 登録済みのデバイスをクローズ
     debugf("clsoe all devices...");
     for (dev = devices; dev; dev = dev->next)
     {
@@ -265,6 +283,7 @@ void net_shutdown(void)
     return;
 }
 
+//プロトコルスタックの初期化
 int net_init(void)
 {
     if (intr_init() == -1)

@@ -34,23 +34,23 @@
 
 struct net_device
 {
-    struct net_device *next;
+    struct net_device *next; //次のデバイスへのポインタ
     struct net_iface *ifaces;
     unsigned int index;
     char name[IFNAMSIZ];
-    uint16_t type;
-    uint16_t mtu;
+    uint16_t type; // デバイスの種別
+    uint16_t mtu;  // Maximum Transmission Unit
     uint16_t flags;
-    uint16_t hlen; /* header  length */
-    uint16_t alen; /* address length */
-    uint8_t addr[NET_DEVICE_ADDR_LEN];
-    union
+    uint16_t hlen;                     /* header  length */
+    uint16_t alen;                     /* address length */
+    uint8_t addr[NET_DEVICE_ADDR_LEN]; // ハードウェアアドレスなど
+    union                              //共用体　同じメモリ空間に2つの変数を定義
     {
         uint8_t peer[NET_DEVICE_ADDR_LEN];
         uint8_t broadcast[NET_DEVICE_ADDR_LEN];
     };
-    struct net_device_ops *ops;
-    void *priv;
+    struct net_device_ops *ops; // デバイスドライバが使う関数へのポインタ
+    void *priv;                 // デバイスが使うprivate データへのポインタ
 };
 
 struct net_device_ops
