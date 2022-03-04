@@ -3,6 +3,8 @@
         "net.h": "c",
         "platform.h": "c",
         "stdlib.h": "c",
-        "pthread.h": "c"
+        "pthread.h": "c",
+        "ip.h": "c",
+        "icmp.h": "c"
     }
 }

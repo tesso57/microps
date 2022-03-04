@@ -8,9 +8,10 @@
 #include "util.h"
 #include "net.h"
 
+// IRQ ハンドラとの対応表
 struct irq_entry
 {
-    struct irq_entry *next;
+    struct irq_entry *next; // 次のIRQ構造体へのポインタ
     unsigned int irq;
     int (*handler)(unsigned int irq, void *dev);
     int flags;

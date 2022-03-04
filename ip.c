@@ -26,10 +26,18 @@ struct ip_hdr
     uint8_t options[];
 };
 
+struct ip_protocol
+{
+    struct ip_protocol *next;
+    uint8_t type;
+    void (*handler)(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface);
+};
+
 const ip_addr_t IP_ADDR_ANY = 0x00000000;
 const ip_addr_t IP_ADDR_BROADCAST = 0xffffffff;
 
 static struct ip_iface *ifaces;
+static struct ip_protocol *protocols;
 
 int ip_addr_pton(const char *p, ip_addr_t *n)
 {
@@ -162,6 +170,31 @@ struct ip_iface *ip_iface_select(ip_addr_t addr)
     return entry;
 }
 
+int ip_protocol_register(uint8_t type, void (*handler)(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface))
+{
+    struct ip_protocol *entry;
+    for (entry = protocols; entry; entry = entry->next)
+    {
+        if (entry->type == type)
+        {
+            errorf("already exists type=0x%04x", entry->type);
+            return -1;
+        }
+    }
+    entry = memory_alloc(sizeof(entry));
+    if (!entry)
+    {
+        errorf("memory_alloc() failure");
+        return -1;
+    }
+    entry->type = type;
+    entry->handler = handler;
+    entry->next = protocols;
+    protocols = entry;
+    infof("registered, type=%u", entry->type);
+    return 0;
+}
+
 static void ip_input(const uint8_t *data, size_t len, struct net_device *dev)
 {
     struct ip_hdr *hdr;
@@ -217,6 +250,16 @@ static void ip_input(const uint8_t *data, size_t len, struct net_device *dev)
     }
     debugf("dev=%s, iface=%s, protocol=%u, total=%u", dev->name, ip_addr_ntop(iface->unicast, addr, sizeof(addr)), hdr->protocol, total);
     ip_dump(data, total);
+
+    struct ip_protocol *entry;
+    for (entry = protocols; entry; entry = entry->next)
+    {
+        if (entry->type == hdr->protocol)
+        {
+            entry->handler((uint8_t *)hdr + hlen, total - hlen, hdr->src, hdr->dst, iface);
+            return;
+        }
+    }
 }
 
 static int ip_output_device(struct ip_iface *iface, const uint8_t *data, size_t len, ip_addr_t dst)
@@ -247,7 +290,7 @@ static ssize_t ip_output_core(struct ip_iface *iface, uint8_t protocol, const ui
     char addr[IP_ADDR_STR_LEN];
 
     hdr = (struct ip_hdr *)buf;
-    hlen = sizeof(*hdr);
+    hlen = sizeof(*hdr); // Q なぜポインタでサイズが変わる???
     hdr->vhl = (IP_VERSION_IPV4 << 4) | (hlen >> 2);
     hdr->tos = 0;
     total = hlen + len;

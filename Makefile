@@ -6,6 +6,7 @@ DRIVERS = driver/dummy.o \
 OBJS = util.o \
 	   net.o \
 	   ip.o \
+	   icmp.o \
 
 TESTS = test/step0.exe \
 		test/step1.exe \
@@ -16,6 +17,7 @@ TESTS = test/step0.exe \
 		test/step6.exe \
 		test/step7.exe \
 		test/step8.exe \
+		test/step9.exe \
 
 CFLAGS := $(CFLAGS) -g -W -Wall -Wno-unused-parameter -iquote .
 
@@ -27,9 +29,7 @@ ifeq ($(shell uname),Linux)
 endif
 
 ifeq ($(shell uname),Darwin)
-  BASE = platform/linux
-  CFLAGS := $(CFLAGS) -pthread -iquote $(BASE)
-  # macOS specific settings
+ 
 endif
 
 .SUFFIXES:
