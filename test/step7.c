@@ -4,8 +4,9 @@
 
 #include "util.h"
 #include "net.h"
+#include "ip.h"
 
-#include "driver/dummy.h"
+#include "driver/loopback.h"
 
 #include "test.h"
 
@@ -20,16 +21,28 @@ static void on_signal(int s)
 int main(int argc, char *argv[])
 {
     struct net_device *dev;
-    signal(SIGINT, on_signal); //シグナルに対する処理。　SIGINTはユーザー操作による割り込み https://programming-place.net/ppp/contents/c/appendix/reference/signal.html
+    struct ip_iface *iface;
+    signal(SIGINT, on_signal);
     if (net_init() == -1)
     {
         errorf("net_init() failure");
         return -1;
     }
-    dev = dummy_init();
+    dev = loopback_init();
     if (!dev)
     {
-        errorf("dummy_init() failure");
+        errorf("loopback_init() failure");
+        return -1;
+    }
+    iface = ip_iface_alloc(LOOPBACK_IP_ADDR, LOOPBACK_NETMASK);
+    if (!iface)
+    {
+        errorf("ip_iface_alloc() failure");
+        return -1;
+    }
+    if (ip_iface_register(dev, iface) == -1)
+    {
+        errorf("ip_iface_register() failure");
         return -1;
     }
     if (net_run() == -1)
@@ -39,7 +52,7 @@ int main(int argc, char *argv[])
     }
     while (!terminate)
     {
-        if (net_device_output(dev, 0x0800, test_data, sizeof(test_data), NULL) == -1)
+        if (net_device_output(dev, NET_PROTOCOL_TYPE_IP, test_data, sizeof(test_data), NULL) == -1)
         {
             errorf("net_device_output() failure");
             break;
