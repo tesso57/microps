@@ -26,6 +26,7 @@ TESTS = test/step0.exe \
 		test/step13.exe \
 		test/step14.exe \
 		test/step15.exe \
+		test/step16.exe \
 
 CFLAGS := $(CFLAGS) -g -W -Wall -Wno-unused-parameter -iquote . 
 # -Dmacro
@@ -34,6 +35,7 @@ ifeq ($(shell uname),Linux)
   BASE = platform/linux
   CFLAGS := $(CFLAGS) -pthread -iquote $(BASE)
   OBJS := $(OBJS) $(BASE)/intr.o
+  LDFLAGS := $(LDFLAGS) -lrt
   DRIVERS := $(DRIVERS) $(BASE)/driver/ether_tap.o
 endif
 

@@ -2,6 +2,8 @@
 #include <string.h>
 #include <signal.h>
 #include <pthread.h>
+#include <time.h>
+#include <errno.h>
 
 #include "platform.h"
 
@@ -79,6 +81,23 @@ int intr_raise_irq(unsigned int irq)
     return pthread_kill(tid, (int)irq);
 }
 
+static int intr_timer_setup(struct itimerspec *interval)
+{
+    timer_t id;
+    if (timer_create(CLOCK_REALTIME, NULL, &id) == -1)
+    {
+        errorf("timer_create: %s", strerror(errno));
+        return -1;
+    }
+
+    if (timer_settime(id, 0, interval, NULL) == -1)
+    {
+        errorf("timer_settime: %s", strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
 //　割り込みスレッドのエントリポイント
 static void *intr_thread(void *arg)
 {
@@ -87,12 +106,20 @@ static void *intr_thread(void *arg)
      * 割り込み処理用の別スレッドを起動して、シグナルの発生を待ち受ける。
      */
 
+    const struct timespec ts = {0, 1000000};
+    struct itimerspec interval = {ts, ts};
+
     int terminate = 0, sig, err;
     struct irq_entry *entry;
 
     debugf("start...");
     //メインスレッドと同期
     pthread_barrier_wait(&barrier);
+    if (intr_timer_setup(&interval) == -1)
+    {
+        errorf("intr_timer_setup() failure");
+        return NULL;
+    }
     //割り込みが発生するまで待つ
     while (!terminate)
     {
@@ -114,6 +141,9 @@ static void *intr_thread(void *arg)
         // ユーザー定義のシグナル
         case SIGUSR1:
             net_softirq_handler();
+            break;
+        case SIGALRM:
+            net_timer_handler();
             break;
         // それ以外
         default:
@@ -179,5 +209,6 @@ int intr_init(void)
     sigemptyset(&sigmask);                   // シグナル集合を空にする
     sigaddset(&sigmask, SIGHUP);             // シグナル集合にSIGHUPをついか
     sigaddset(&sigmask, SIGUSR1);            // シグナル集合にSIGUSR1を追加
+    sigaddset(&sigmask, SIGALRM);
     return 0;
 }
