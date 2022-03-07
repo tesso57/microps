@@ -101,7 +101,7 @@ static void ip_dump(const uint8_t *data, size_t len)
     fprintf(stderr, "        sum: 0x%04x\n", ntoh16(hdr->sum));
     fprintf(stderr, "        src: %s\n", ip_addr_ntop(hdr->src, addr, sizeof(addr)));
     fprintf(stderr, "        dst: %s\n", ip_addr_ntop(hdr->dst, addr, sizeof(addr)));
-#ifndef HEXDUMP
+#ifdef HEXDUMP
     hexdump(stderr, data, len);
 #endif
     funlockfile(stderr);

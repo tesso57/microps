@@ -74,7 +74,7 @@ static void icmp_dump(const uint8_t *data, size_t len)
         fprintf(stderr, "     values: 0x%08x\n", ntoh32(hdr->values));
         break;
     }
-#ifndef HEXDUMP
+#ifdef HEXDUMP
     hexdump(stderr, data, len);
 #endif
     funlockfile(stderr);

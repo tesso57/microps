@@ -66,7 +66,7 @@ static void ether_dump(const uint8_t *frame, size_t flen)
     fprintf(stderr, "       src: %s\n", ether_addr_ntop(hdr->src, addr, sizeof(addr)));
     fprintf(stderr, "       dst: %s\n", ether_addr_ntop(hdr->dst, addr, sizeof(addr)));
     fprintf(stderr, "      type: 0x%04x\n", ntoh16(hdr->type));
-#ifndef HEXDUMP
+#ifdef HEXDUMP
     hexdump(stderr, frame, flen);
 #endif
     funlockfile(stderr);

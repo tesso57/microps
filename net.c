@@ -7,6 +7,7 @@
 
 #include "util.h"
 #include "net.h"
+#include "arp.h"
 #include "ip.h"
 #include "icmp.h"
 
@@ -293,6 +294,12 @@ int net_init(void)
         return -1;
     }
 
+    if (arp_init() == -1)
+    {
+        errorf("arp_init() failure");
+        return -1;
+    }
+
     if (ip_init() == -1)
     {
         errorf("ip_init() failure");
@@ -304,6 +311,7 @@ int net_init(void)
         errorf("icmp_init() failure");
         return -1;
     }
+
     infof("initialized");
     return 0;
 }
