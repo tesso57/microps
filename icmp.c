@@ -31,6 +31,8 @@ static char *icmp_type_ntoa(uint8_t type)
     {
     case ICMP_TYPE_ECHOREPLY:
         return "EchoReply";
+    case ICMP_TYPE_DEST_UNREACH:
+        return "DestinationUnreachable";
     case ICMP_TYPE_SOURCE_QUENCH:
         return "SourceQuench";
     case ICMP_TYPE_REDIRECT:
@@ -60,7 +62,7 @@ static void icmp_dump(const uint8_t *data, size_t len)
     hdr = (struct icmp_hdr *)data;
     fprintf(stderr, "       type: %u (%s)\n", hdr->type, icmp_type_ntoa(hdr->type));
     fprintf(stderr, "       code: %u\n", hdr->code);
-    fprintf(stderr, "        sum: 0x%04x\n", ntoh16(hdr->sum));
+    fprintf(stderr, "        sum: 0x%04x (0x%04x)\n", ntoh16(hdr->sum), ntoh16(cksum16((uint16_t *)data, len, -hdr->sum)));
 
     switch (hdr->type)
     {
@@ -107,7 +109,7 @@ void icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, s
     switch (hdr->type)
     {
     case ICMP_TYPE_ECHO:
-        icmp_output(ICMP_TYPE_ECHOREPLY, hdr->code, hdr->values, (uint8_t *)hdr + 1, len - sizeof(hdr), iface->unicast, src);
+        icmp_output(ICMP_TYPE_ECHOREPLY, hdr->code, hdr->values, (uint8_t *)(hdr + 1), len - sizeof(hdr), iface->unicast, src);
         break;
 
     default:
@@ -140,6 +142,10 @@ int icmp_output(uint8_t type, uint8_t code, uint32_t values, const uint8_t *data
 
 int icmp_init(void)
 {
-    ip_protocol_register(IP_PROTOCOL_ICMP, icmp_input);
+    if (ip_protocol_register(IP_PROTOCOL_ICMP, icmp_input) == -1)
+    {
+        errorf("ip_protocol_register() failure");
+        return -1;
+    }
     return 0;
 }
