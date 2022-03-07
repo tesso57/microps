@@ -21,7 +21,7 @@ struct irq_entry
 
 // irqのリスト
 static struct irq_entry *irqs;
-// シグナル集合。捕捉したいシグナルのみ登録
+// シグナル集合。捕捉したいシグナルのみ登録。ブロックしたいシグナルの集合
 static sigset_t sigmask;
 
 // 割り込み処理のスレッドID
@@ -79,9 +79,14 @@ int intr_raise_irq(unsigned int irq)
     return pthread_kill(tid, (int)irq);
 }
 
-// 割り込みの補足と振り分け
+//　割り込みスレッドのエントリポイント
 static void *intr_thread(void *arg)
 {
+    /*
+     * 非同期実行されるシグナルハンドラでは実行できる処理が大きく制限されるため、
+     * 割り込み処理用の別スレッドを起動して、シグナルの発生を待ち受ける。
+     */
+
     int terminate = 0, sig, err;
     struct irq_entry *entry;
 
@@ -91,7 +96,10 @@ static void *intr_thread(void *arg)
     //割り込みが発生するまで待つ
     while (!terminate)
     {
-        err = sigwait(&sigmask, &sig);
+        // シグナル一覧
+        // https://atmarkit.itmedia.co.jp/ait/articles/1708/04/news015.html
+        // https://www.xmisao.com/2013/11/10/linux-kill-signals.html
+        err = sigwait(&sigmask, &sig); // 非同期にブロックされたシグナルを待つ
         if (err)
         {
             errorf("sigwait() %s", strerror(err));
@@ -99,20 +107,25 @@ static void *intr_thread(void *arg)
         }
         switch (sig)
         {
+        //制御端末の切断
         case SIGHUP:
             terminate = 1;
             break;
-
+        // ユーザー定義のシグナル
         case SIGUSR1:
             net_softirq_handler();
             break;
-
+        // それ以外
         default:
+            // IRQリストを巡回する
+            // Linuxのリアルタイムシグナル
             for (entry = irqs; entry; entry = entry->next)
             {
+                // IRQ番号と一致するやつのハンドラを呼ぶ
                 if (entry->irq == (unsigned int)sig)
                 {
                     debugf("irq=%d, name=%s", entry->irq, entry->name);
+                    // ハンドラを呼び出す
                     entry->handler(entry->irq, entry->dev);
                 }
             }
@@ -126,6 +139,7 @@ static void *intr_thread(void *arg)
 int intr_run(void)
 {
     int err;
+    // シグナルマスクの設定を変更。ブロックしたいシグナル一覧をここで登録
     err = pthread_sigmask(SIG_BLOCK, &sigmask, NULL);
     if (err)
     {
@@ -133,33 +147,37 @@ int intr_run(void)
         return -1;
     }
 
+    // 割り込みスレッドを起動
     err = pthread_create(&tid, NULL, intr_thread, NULL);
     if (err)
     {
         errorf("pthread_create() %s", strerror(err));
         return -1;
     }
+
+    //スレッドが動き出すまで待つ
     pthread_barrier_wait(&barrier);
     return 0;
 }
 
 void intr_shutdown(void)
 {
+    // 割り込みスレッドが起動中かどうかを確認
     if (pthread_equal(tid, pthread_self()) != 0)
     {
         return;
     }
 
-    pthread_kill(tid, SIGHUP);
-    pthread_join(tid, NULL);
+    pthread_kill(tid, SIGHUP); // SIGHUPを送信して、割り込みスレッドを停止させる
+    pthread_join(tid, NULL);   // 割り込みスレッドの終了を待つ
 }
 
 int intr_init(void)
 {
-    tid = pthread_self();
-    pthread_barrier_init(&barrier, NULL, 2);
-    sigemptyset(&sigmask);
-    sigaddset(&sigmask, SIGHUP);
-    sigaddset(&sigmask, SIGUSR1);
+    tid = pthread_self();                    // tidを自分のスレッドの番号で初期化
+    pthread_barrier_init(&barrier, NULL, 2); // スレッドの数を初期化
+    sigemptyset(&sigmask);                   // シグナル集合を空にする
+    sigaddset(&sigmask, SIGHUP);             // シグナル集合にSIGHUPをついか
+    sigaddset(&sigmask, SIGUSR1);            // シグナル集合にSIGUSR1を追加
     return 0;
 }
