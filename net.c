@@ -11,15 +11,17 @@
 #include "arp.h"
 #include "ip.h"
 #include "icmp.h"
+#include "udp.h"
 
+// ネットワーク層のプロトコル一覧
 struct net_protocol
 {
-    struct net_protocol *next;
-    uint16_t type;
-    struct queue_head queue;
-    void (*handler)(const uint8_t *data, size_t len, struct net_device *dev);
+    struct net_protocol *next;                                                // 次のプロトコル
+    uint16_t type;                                                            // プロトコルの種別 net.hに定義
+    struct queue_head queue;                                                  // プロトコルのキュー
+    void (*handler)(const uint8_t *data, size_t len, struct net_device *dev); // プロトコルの入力関数
 };
-
+// 受信キューのエントリー
 struct net_protocol_queue_entry
 {
     struct net_device *dev;
@@ -181,6 +183,7 @@ int net_protocol_register(uint16_t type, void (*handler)(const uint8_t *data, si
 {
     struct net_protocol *proto;
 
+    // 重複登録の確認
     for (proto = protocols; proto; proto = proto->next)
     {
         if (type == proto->type)
@@ -189,6 +192,8 @@ int net_protocol_register(uint16_t type, void (*handler)(const uint8_t *data, si
             return -1;
         }
     }
+
+    // プロトコル構造体のメモリを確保
     proto = memory_alloc(sizeof(*proto));
     if (!proto)
     {
@@ -248,6 +253,7 @@ int net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net
     {
         if (proto->type == type)
         {
+            // エントリーのメモリを確保
             entry = memory_alloc(sizeof(*entry) + len);
             if (!entry)
             {
@@ -264,11 +270,12 @@ int net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net
                 return -1;
             }
             debugf("queue pushed (num:%u), dev=%s, type=0x%04x, len=%zu", proto->queue.num, dev->name, type, len);
-            intr_raise_irq(INTR_IRQ_SOFTIRQ);
+            intr_raise_irq(INTR_IRQ_SOFTIRQ); // ソフトウェア割り込みの発生
             debugdump(data, len);
             return 0;
         }
     }
+    /* unsupported protocol */
     return 0;
 }
 
@@ -298,6 +305,7 @@ int net_softirq_handler(void)
 int net_run(void)
 {
     struct net_device *dev;
+    // 割り込みの起動
     if (intr_run() == -1)
     {
         errorf("intr_run() failure");
@@ -333,6 +341,7 @@ void net_shutdown(void)
 //プロトコルスタックの初期化
 int net_init(void)
 {
+    // 割り込みの初期化
     if (intr_init() == -1)
     {
         errorf("intr_init() failure");
@@ -354,6 +363,12 @@ int net_init(void)
     if (icmp_init() == -1)
     {
         errorf("icmp_init() failure");
+        return -1;
+    }
+
+    if (udp_init() == -1)
+    {
+        errorf("udp_init() failure");
         return -1;
     }
 

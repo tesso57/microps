@@ -16,16 +16,16 @@
 
 struct loopback
 {
-    int irq;
-    mutex_t mutex;
-    struct queue_head queue;
+    int irq;                 // loopbackのirq
+    mutex_t mutex;           // loopbackのmutex
+    struct queue_head queue; // loopbackのqueue
 };
 
 struct loopback_queue_entry
 {
     uint16_t type;
     size_t len;
-    uint8_t data[];
+    uint8_t data[]; // フレキシブルメンバー
 };
 
 static int loopback_transmit(struct net_device *dev, uint16_t type, const uint8_t *data, size_t len, const void *dst)
@@ -33,48 +33,56 @@ static int loopback_transmit(struct net_device *dev, uint16_t type, const uint8_
     struct loopback_queue_entry *entry;
     unsigned int num;
 
-    mutex_lock(&PRIV(dev)->mutex);
-    if (PRIV(dev)->queue.num >= LOOPBACK_QUEUE_LIMIT)
+    mutex_lock(&PRIV(dev)->mutex);                    // queueへのアクセスをmutex保護
+    if (PRIV(dev)->queue.num >= LOOPBACK_QUEUE_LIMIT) // queueの上限を超えたらエラーを返す
     {
         mutex_unlock(&PRIV(dev)->mutex);
         errorf("queue is full");
         return -1;
     }
-    entry = memory_alloc(sizeof(*entry) + len);
+    entry = memory_alloc(sizeof(*entry) + len); // queueに格納するエントリのメモリの確保
     if (!entry)
     {
         mutex_unlock(&PRIV(dev)->mutex);
         errorf("memory_alloc() failure");
         return -1;
     }
+    // メタデータ設定とデータコピー
     entry->type = type;
     entry->len = len;
     memcpy(entry->data, data, len);
+
+    //キューにpush
     queue_push(&PRIV(dev)->queue, entry);
+
     num = PRIV(dev)->queue.num;
     mutex_unlock(&PRIV(dev)->mutex);
     debugf("queue pushed (num:%u), dev=%s, type=0x%04x, len=%zd", num, dev->name, type, len);
     debugdump(data, len);
-    intr_raise_irq(PRIV(dev)->irq);
+    intr_raise_irq(PRIV(dev)->irq); // 割り込みを発生させる
     return 0;
 }
 
+// loopbackの割り込み
 static int loopback_isr(unsigned int irq, void *id)
 {
     struct net_device *dev;
     struct loopback_queue_entry *entry;
 
     dev = (struct net_device *)id;
-    mutex_lock(&PRIV(dev)->mutex);
+    mutex_lock(&PRIV(dev)->mutex); // mutexの保護
     while (1)
     {
+        // キューからエントリを取り出す
         entry = queue_pop(&PRIV(dev)->queue);
+        // エントリがない場合はループを抜ける
         if (!entry)
         {
             break;
         }
         debugf("queue popped (num:%u),dev=%s, type=0x%04x, len0%zd", PRIV(dev)->queue.num, dev->name, entry->type, entry->len);
         debugdump(entry->data, entry->len);
+        // net_input_handlerにデータを渡す
         net_input_handler(entry->type, entry->data, entry->len, dev);
         memory_free(entry);
     }
@@ -90,7 +98,7 @@ struct net_device *loopback_init(void)
 {
     struct net_device *dev;
     struct loopback *lo;
-
+    // デバイスの生成とパラメータ設定
     dev = net_device_alloc();
     if (!dev)
     {
@@ -104,6 +112,7 @@ struct net_device *loopback_init(void)
     dev->flags = NET_DEVICE_FLAG_LOOPBACK;
     dev->ops = &loopback_ops;
 
+    // ドライバーが持つprivateなデータの生成
     lo = memory_alloc(sizeof(*lo));
     if (!lo)
     {
@@ -111,8 +120,8 @@ struct net_device *loopback_init(void)
         return NULL;
     }
     lo->irq = LOOPBACK_IRQ;
-    mutex_init(&lo->mutex);
-    queue_init(&lo->queue);
+    mutex_init(&lo->mutex); // mutex の初期化
+    queue_init(&lo->queue); // queue の初期化
     dev->priv = lo;
 
     if (net_device_register(dev) == -1)
