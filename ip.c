@@ -46,6 +46,7 @@ struct ip_route
 const ip_addr_t IP_ADDR_ANY = 0x00000000;
 const ip_addr_t IP_ADDR_BROADCAST = 0xffffffff;
 
+// familyが IPであるインターフェイスの一覧 ※異なるハードウェアをまたぐ
 static struct ip_iface *ifaces;
 static struct ip_protocol *protocols;
 static struct ip_route *routes;
@@ -283,6 +284,7 @@ int ip_iface_register(struct net_device *dev, struct ip_iface *iface)
     return 0;
 }
 
+// 指定されたアドレスを持つifaceを取得
 struct ip_iface *ip_iface_select(ip_addr_t addr)
 {
     struct ip_iface *entry;
@@ -297,6 +299,7 @@ struct ip_iface *ip_iface_select(ip_addr_t addr)
     return entry;
 }
 
+// ipインターフェイスの登録
 int ip_protocol_register(uint8_t type, void (*handler)(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface))
 {
     struct ip_protocol *entry;
@@ -374,12 +377,13 @@ static void ip_input(const uint8_t *data, size_t len, struct net_device *dev)
         errorf("fragments does not support");
         return;
     }
-
+    // デバイスに紐づく ipインターフェイスを取得
     iface = (struct ip_iface *)net_device_get_iface(dev, NET_IFACE_FAMILY_IP);
     if (!iface)
     {
         return;
     }
+    // 取得したipインターフェイスとパケットを検証
     if (hdr->dst != iface->unicast && hdr->dst != IP_ADDR_BROADCAST && hdr->dst != iface->broadcast)
     {
         return;
@@ -449,10 +453,12 @@ static ssize_t ip_output_core(struct ip_iface *iface, uint8_t protocol, const ui
     return ip_output_device(iface, buf, total, nexthop);
 }
 
+// 本来はデバイスのランダム値を使ったほうがいい.
+// マイコン等では、ランダム値を取得できないのでインクリメントしている
 static uint16_t ip_generate_id(void)
 {
     static mutex_t mutex = MUTEX_INITIALIZER;
-    static uint16_t id = 128;
+    static uint16_t id = 128; // なんとなく 128. 0だと失敗と見分けがつきにくいため
     uint16_t ret;
 
     mutex_lock(&mutex);
@@ -461,6 +467,7 @@ static uint16_t ip_generate_id(void)
     return ret;
 }
 
+// IPデータグラムを出力
 ssize_t ip_output(uint8_t protocol, const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst)
 {
     struct ip_route *route;
@@ -488,12 +495,16 @@ ssize_t ip_output(uint8_t protocol, const uint8_t *data, size_t len, ip_addr_t s
     }
     nexthop = (route->nexthop != IP_ADDR_ANY) ? route->nexthop : dst;
 
+    // デバイスのMTUを超える場合はエラー. データ + IPヘッダの最小の大きさ
     if (NET_IFACE(iface)->dev->mtu < IP_HDR_SIZE_MIN + len)
     {
         errorf("too long, dev=%s, mtu=%u < %zu", NET_IFACE(iface)->dev->name, NET_IFACE(iface)->dev->mtu, IP_HDR_SIZE_MIN + len);
         return -1;
     }
+    // IPデータグラムのIPを決める
     id = ip_generate_id();
+
+    // IPデータグラムを送信
     if (ip_output_core(iface, protocol, data, len, iface->unicast, dst, nexthop, id, 0) == -1)
     {
         errorf("ip_output_core() failure");
