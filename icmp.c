@@ -51,6 +51,7 @@ static char *icmp_type_ntoa(uint8_t type)
     return "Unkown";
 }
 
+// ICMPの内容をダンプする関数
 static void icmp_dump(const uint8_t *data, size_t len)
 {
     struct icmp_hdr *hdr;
@@ -80,6 +81,7 @@ static void icmp_dump(const uint8_t *data, size_t len)
     funlockfile(stderr);
 }
 
+// icmpのハンドラー
 void icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface)
 {
     // dstをsrcにしてはいけない。ブロードキャストアドレス
@@ -95,6 +97,7 @@ void icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, s
         return;
     }
 
+    // checksumの検証(すべてを含む)
     if (cksum16((uint16_t *)hdr, len, 0) != 0)
     {
         errorf("checksum error");
@@ -106,6 +109,7 @@ void icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, s
 
     switch (hdr->type)
     {
+    // メッセージのタイプがECHOであればECHOREPLYを送信
     case ICMP_TYPE_ECHO:
         icmp_output(ICMP_TYPE_ECHOREPLY, hdr->code, hdr->values, (uint8_t *)hdr + 1, len - sizeof(hdr), iface->unicast, src);
         break;
@@ -115,14 +119,16 @@ void icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, s
     }
 }
 
+// icmpの出力
 int icmp_output(uint8_t type, uint8_t code, uint32_t values, const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst)
 {
     uint8_t buf[ICMP_BUFSIZ];
     struct icmp_hdr *hdr;
-    size_t msg_len;
+    size_t msg_len; // icmpメッセージの長さ(ヘッダー + データ)
     char addr1[IP_ADDR_STR_LEN];
     char addr2[IP_ADDR_STR_LEN];
 
+    //ヘッダーの作成
     hdr = (struct icmp_hdr *)buf;
     hdr->type = type;
     hdr->code = code;
@@ -135,9 +141,11 @@ int icmp_output(uint8_t type, uint8_t code, uint32_t values, const uint8_t *data
     debugf("%s => %s, len=%zu", ip_addr_ntop(src, addr1, sizeof(addr1)), ip_addr_ntop(dst, addr2, sizeof(addr2)), msg_len);
     icmp_dump((uint8_t *)hdr, msg_len);
 
+    // IPの出力関数に渡す
     return ip_output(IP_PROTOCOL_ICMP, (uint8_t *)hdr, msg_len, src, dst);
 }
 
+// icmpをIPに登録
 int icmp_init(void)
 {
     ip_protocol_register(IP_PROTOCOL_ICMP, icmp_input);

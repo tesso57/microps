@@ -7,7 +7,7 @@
 
 #include "net.h"
 
-#define ETHER_ADDR_LEN 6
+#define ETHER_ADDR_LEN 6 // Ethernetアドレスのバイト長
 #define ETHER_ADDR_STR_LEN 18
 
 #define ETHER_HDR_SIZE 14

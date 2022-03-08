@@ -27,6 +27,7 @@ struct ip_hdr
     uint8_t options[]; // 可変長のフレキシブル配列メンバ
 };
 
+// IPの上位プロトコルの構造体
 struct ip_protocol
 {
     struct ip_protocol *next;
@@ -256,7 +257,7 @@ struct ip_iface *ip_iface_alloc(const char *unicast, const char *netmask)
     iface->broadcast = (iface->unicast & iface->netmask) | ~iface->netmask;
     return iface;
 }
-
+// ipインターフェイスの登録
 int ip_iface_register(struct net_device *dev, struct ip_iface *iface)
 {
     char addr1[IP_ADDR_STR_LEN];
@@ -299,18 +300,21 @@ struct ip_iface *ip_iface_select(ip_addr_t addr)
     return entry;
 }
 
-// ipインターフェイスの登録
+// IPの上位プロトコルを登録
 int ip_protocol_register(uint8_t type, void (*handler)(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface))
 {
     struct ip_protocol *entry;
+    // プロトコルリストを巡回
     for (entry = protocols; entry; entry = entry->next)
     {
+        //すでに同じプロトコルが登録されている場合はエラー
         if (entry->type == type)
         {
             errorf("already exists type=0x%04x", entry->type);
             return -1;
         }
     }
+    //　メモリを確保
     entry = memory_alloc(sizeof(entry));
     if (!entry)
     {
@@ -391,9 +395,11 @@ static void ip_input(const uint8_t *data, size_t len, struct net_device *dev)
     debugf("dev=%s, iface=%s, protocol=%u, total=%u", dev->name, ip_addr_ntop(iface->unicast, addr, sizeof(addr)), hdr->protocol, total);
     ip_dump(data, total);
 
+    // プロトコルの検索　
     struct ip_protocol *entry;
     for (entry = protocols; entry; entry = entry->next)
     {
+        // ヘッダーのプロトコルと同じものがあれば、それに対応したハンドラーを呼び出す
         if (entry->type == hdr->protocol)
         {
             entry->handler((uint8_t *)hdr + hlen, total - hlen, hdr->src, hdr->dst, iface);
@@ -407,11 +413,11 @@ static int ip_output_device(struct ip_iface *iface, const uint8_t *data, size_t 
     uint8_t hwaddr[NET_DEVICE_ADDR_LEN] = {};
     int ret;
 
-    if (NET_IFACE(iface)->dev->flags & NET_DEVICE_FLAG_NEED_ARP)
+    if (NET_IFACE(iface)->dev->flags & NET_DEVICE_FLAG_NEED_ARP) // ARPによるアドレス解決が必要であるとき
     {
         if (dst == iface->broadcast || dst == IP_ADDR_BROADCAST)
         {
-            memcpy(hwaddr, NET_IFACE(iface)->dev->broadcast, NET_IFACE(iface)->dev->alen);
+            memcpy(hwaddr, NET_IFACE(iface)->dev->broadcast, NET_IFACE(iface)->dev->alen); // 宛先がブロードキャスト
         }
         else
         {
@@ -422,10 +428,11 @@ static int ip_output_device(struct ip_iface *iface, const uint8_t *data, size_t 
             }
         }
     }
-
+    // デバイスにデータを送信。
     return net_device_output(NET_IFACE(iface)->dev, NET_PROTOCOL_TYPE_IP, data, len, hwaddr);
 }
 
+// IPデータグラムの作成
 static ssize_t ip_output_core(struct ip_iface *iface, uint8_t protocol, const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, ip_addr_t nexthop, uint16_t id, uint16_t offset)
 {
     uint8_t buf[IP_TOTAL_SIZE_MAX];
@@ -443,14 +450,14 @@ static ssize_t ip_output_core(struct ip_iface *iface, uint8_t protocol, const ui
     hdr->offset = hton16(offset);
     hdr->ttl = 0xff;
     hdr->protocol = protocol;
-    hdr->sum = 0;
+    hdr->sum = 0; // 0で初期化
     hdr->src = src;
     hdr->dst = dst;
     hdr->sum = cksum16((uint16_t *)hdr, hlen, 0);
     memcpy(hdr + 1, data, len);
     debugf("dev=%s, dst=%s, protocol=%u, len=%u", NET_IFACE(iface)->dev->name, ip_addr_ntop(dst, addr, sizeof(addr)), protocol, total);
     ip_dump(buf, total);
-    return ip_output_device(iface, buf, total, nexthop);
+    return ip_output_device(iface, buf, total, nexthop); // データをデバイスに送信
 }
 
 // 本来はデバイスのランダム値を使ったほうがいい.
@@ -467,7 +474,7 @@ static uint16_t ip_generate_id(void)
     return ret;
 }
 
-// IPデータグラムを出力
+// IPデータグラムを出力 (値の妥当性を最初に検証)
 ssize_t ip_output(uint8_t protocol, const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst)
 {
     struct ip_route *route;

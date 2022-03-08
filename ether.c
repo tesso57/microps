@@ -8,12 +8,12 @@
 #include "util.h"
 #include "net.h"
 #include "ether.h"
-
+// Ethernetヘッダの構造体
 struct ether_hdr
 {
-    uint8_t dst[ETHER_ADDR_LEN];
-    uint8_t src[ETHER_ADDR_LEN];
-    uint16_t type;
+    uint8_t dst[ETHER_ADDR_LEN]; // MACアドレス
+    uint8_t src[ETHER_ADDR_LEN]; // MACアドレス
+    uint16_t type;               // Ethernetの長さ　または タイプ
 };
 
 const uint8_t ETHER_ADDR_ANY[ETHER_ADDR_LEN] = {"\x00\x00\x00\x00\x00\x00"};
@@ -56,6 +56,7 @@ char *ether_addr_ntop(const uint8_t *n, char *p, size_t size)
     return p;
 }
 
+// Ethernet フレームをダンプ
 static void ether_dump(const uint8_t *frame, size_t flen)
 {
     struct ether_hdr *hdr;
@@ -72,17 +73,22 @@ static void ether_dump(const uint8_t *frame, size_t flen)
     funlockfile(stderr);
 }
 
+// ehternet の送信のヘルパー関数
 int ether_transmit_helper(struct net_device *dev, uint16_t type, const uint8_t *data, size_t len, const void *dst, ether_transmit_func_t callback)
 {
     uint8_t frame[ETHER_FRAME_SIZE_MAX] = {};
     struct ether_hdr *hdr;
     size_t flen, pad = 0;
 
+    // Ethernetフレームの生成
     hdr = (struct ether_hdr *)frame;
     memcpy(hdr->dst, dst, ETHER_ADDR_LEN);
     memcpy(hdr->src, dev->addr, ETHER_ADDR_LEN);
     hdr->type = hton16(type);
     memcpy(hdr + 1, data, len);
+
+    // 最小サイズに満たない場合はパディングを挿入
+    // ※ CSMA/CD方式が規定されている都合
     if (len < ETHER_PAYLOAD_SIZE_MIN)
     {
         pad = ETHER_FRAME_SIZE_MIN - len;
@@ -90,6 +96,8 @@ int ether_transmit_helper(struct net_device *dev, uint16_t type, const uint8_t *
     flen = sizeof(*hdr) + len + pad;
     debugf("dev=%s, type=0x%04x, len=%zu", dev->name, type, flen);
     ether_dump(frame, flen);
+    // 引数で渡された関数をコールバックして生成したEthernetフレームを出力
+    // 実際の書き込みはドライバー関数の方で
     return callback(dev, frame, flen) == (ssize_t)flen ? 0 : -1;
 }
 
