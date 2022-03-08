@@ -25,7 +25,7 @@
 #define IP_PROTOCOL_TCP 6
 #define IP_PROTOCOL_UDP 17
 
-typedef uint32_t ip_addr_t;
+typedef uint32_t ip_addr_t; // ipアドレス用の型
 
 struct ip_endpoint
 {
@@ -35,11 +35,11 @@ struct ip_endpoint
 
 struct ip_iface
 {
-    struct net_iface iface;
-    struct ip_iface *next;
-    ip_addr_t unicast;
-    ip_addr_t netmask;
-    ip_addr_t broadcast;
+    struct net_iface iface; // IP(IPv4のこと)のインターフェイス(実体)
+    struct ip_iface *next;  //　次のIPインターフェイスへのポインタ
+    ip_addr_t unicast;      // ユニキャストアドレス
+    ip_addr_t netmask;      // ネットマスク
+    ip_addr_t broadcast;    // ブロードキャスト
 };
 
 extern const ip_addr_t IP_ADDR_ANY;

@@ -117,10 +117,12 @@ static int net_device_close(struct net_device *dev)
     return 0;
 }
 
+// デバイスに論理インターフェイスを紐付け
 int net_device_add_iface(struct net_device *dev, struct net_iface *iface)
 {
     struct net_iface *entry;
 
+    //重複チェック
     for (entry = dev->ifaces; entry; entry = entry->next)
     {
         if (entry->family == iface->family)
@@ -135,6 +137,7 @@ int net_device_add_iface(struct net_device *dev, struct net_iface *iface)
     return 0;
 }
 
+//デバイスに紐づくifaceのうち、familyが同じものを探索
 struct net_iface *net_device_get_iface(struct net_device *dev, int family)
 {
     struct net_iface *entry;
@@ -279,21 +282,25 @@ int net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net
     return 0;
 }
 
+// ソフトウェア割り込みの際に呼ばれる関数
 int net_softirq_handler(void)
 {
     struct net_protocol *proto;
     struct net_protocol_queue_entry *entry;
 
+    // プロトコルリストを巡回
     for (proto = protocols; proto; proto = proto->next)
     {
         while (1)
         {
+            // エントリー取り出し
             entry = queue_pop(&proto->queue);
             if (!entry)
             {
                 break;
             }
             debugf("queue popped (num:%u), dev=%s, type=0x%04x, len=%zu", proto->queue.num, entry->dev->name, proto->type, entry->len);
+            // プロトコルに登録された関数を呼び出し
             proto->handler(entry->data, entry->len, entry->dev);
             memory_free(entry);
         }

@@ -14,17 +14,17 @@
 
 struct ip_hdr
 {
-    uint8_t vhl;
-    uint8_t tos;
-    uint16_t total;
-    uint16_t id;
-    uint16_t offset;
-    uint8_t ttl;
-    uint8_t protocol;
-    uint16_t sum;
-    ip_addr_t src;
-    ip_addr_t dst;
-    uint8_t options[];
+    uint8_t vhl;       // verison + ip header length
+    uint8_t tos;       // サービスタイプ
+    uint16_t total;    // パケットの全長　
+    uint16_t id;       //パケットの識別番号
+    uint16_t offset;   // flag(3) + fragment offsets(13)
+    uint8_t ttl;       // 生存時間
+    uint8_t protocol;  // プロトコル種別
+    uint16_t sum;      //ヘッダのチェックサム
+    ip_addr_t src;     //送信元
+    ip_addr_t dst;     //宛先
+    uint8_t options[]; // 可変長のフレキシブル配列メンバ
 };
 
 struct ip_protocol
@@ -49,7 +49,7 @@ const ip_addr_t IP_ADDR_BROADCAST = 0xffffffff;
 static struct ip_iface *ifaces;
 static struct ip_protocol *protocols;
 static struct ip_route *routes;
-
+// Netwotk binary TO Printable text
 int ip_addr_pton(const char *p, ip_addr_t *n)
 {
     char *sp, *ep;
@@ -78,6 +78,7 @@ int ip_addr_pton(const char *p, ip_addr_t *n)
     return 0;
 }
 
+// Printable text TO Network binary
 char *ip_addr_ntop(ip_addr_t n, char *p, size_t size)
 {
     uint8_t *u8;
@@ -119,6 +120,7 @@ char *ip_endpoint_ntop(const struct ip_endpoint *n, char *p, size_t size)
     snprintf(p + offset, size - offset, ":%d", ntoh16(n->port));
     return p;
 }
+
 static void ip_dump(const uint8_t *data, size_t len)
 {
 
@@ -131,10 +133,10 @@ static void ip_dump(const uint8_t *data, size_t len)
     hdr = (struct ip_hdr *)data;
     v = (hdr->vhl & 0xf0) >> 4;
     hl = hdr->vhl & 0x0f;
-    hlen = hl << 2;
+    hlen = hl << 2; // 単位が32bitであるから 8bit(1byte)単位に変換
     fprintf(stderr, "        vhl: 0x%02x [v: %u, hl: %u (%u)]\n", hdr->vhl, v, hl, hlen);
     fprintf(stderr, "        tos: 0x%02x\n", hdr->tos);
-    total = ntoh16(hdr->total);
+    total = ntoh16(hdr->total); // バイトオーダの変換
     fprintf(stderr, "      total: %u (payload: %u)\n", total, total - hlen);
     fprintf(stderr, "         id: %u\n", ntoh16(hdr->id));
     offset = ntoh16(hdr->offset);
@@ -225,16 +227,18 @@ struct ip_iface *ip_route_get_iface(ip_addr_t dst)
     return route->iface;
 }
 
+// IPの論理インターフェイスを構成
 struct ip_iface *ip_iface_alloc(const char *unicast, const char *netmask)
 {
     struct ip_iface *iface;
-
+    //メモリ確保
     iface = memory_alloc(sizeof(*iface));
     if (!iface)
     {
         errorf("memory_alloc() failure");
         return NULL;
     }
+    // プロトコル種別を設定
     NET_IFACE(iface)->family = NET_IFACE_FAMILY_IP;
     if (ip_addr_pton(unicast, &iface->unicast) == -1)
     {
@@ -327,42 +331,50 @@ static void ip_input(const uint8_t *data, size_t len, struct net_device *dev)
     struct ip_iface *iface;
     char addr[IP_ADDR_STR_LEN];
 
+    // 入力データの長さがIPヘッダの最小サイズより小さい場合はエラー
     if (len < IP_HDR_SIZE_MIN)
     {
         errorf("too short");
         return;
     }
-
+    // 入力データをIPヘッダの構造体として解釈
     hdr = (struct ip_hdr *)data;
+    // IP version
     v = hdr->vhl >> 4;
     if (v != IP_VERSION_IPV4)
     {
         errorf("ip version error");
         return;
     }
+    // IP header length
     hlen = (hdr->vhl & 0x0f) << 2;
     if (len < hlen)
     {
         errorf("header length error");
         return;
     }
+    // IP packetの全長
     total = ntoh16(hdr->total);
     if (len < total)
     {
         errorf("total length error");
         return;
     }
+    // checksumの検証 ※IPはヘッダのみ
     if (cksum16((uint16_t *)hdr, hlen, 0) != 0)
     {
         errorf("checksum error");
         return;
     }
+    // flag and fragment offset
+    // MF(More Flagments) ビットが立っている or フラグメントオフセットに値がある
     offset = ntoh16(hdr->offset);
     if (offset & 0x2000 || offset & 0x1fff)
     {
         errorf("fragments does not support");
         return;
     }
+
     iface = (struct ip_iface *)net_device_get_iface(dev, NET_IFACE_FAMILY_IP);
     if (!iface)
     {
