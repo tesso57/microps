@@ -101,13 +101,14 @@ int ether_transmit_helper(struct net_device *dev, uint16_t type, const uint8_t *
     return callback(dev, frame, flen) == (ssize_t)flen ? 0 : -1;
 }
 
+// etherフレームの入力に関するヘルパー関数
 int ether_input_helper(struct net_device *dev, ether_input_func_t callback)
 {
     uint8_t frame[ETHER_FRAME_SIZE_MAX];
     ssize_t flen;
     struct ether_hdr *hdr;
     uint16_t type;
-
+    // callbackでEthernetフレームを読み込む
     flen = callback(dev, frame, sizeof(frame));
     if (flen < (ssize_t)sizeof(*hdr))
     {

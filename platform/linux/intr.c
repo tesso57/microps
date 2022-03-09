@@ -142,6 +142,9 @@ static void *intr_thread(void *arg)
         case SIGUSR1:
             net_softirq_handler();
             break;
+        case SIGUSR2:
+            net_event_handler();
+            break;
         case SIGALRM:
             net_timer_handler();
             break;
@@ -207,8 +210,9 @@ int intr_init(void)
     tid = pthread_self();                    // tidを自分のスレッドの番号で初期化
     pthread_barrier_init(&barrier, NULL, 2); // スレッドの数を初期化
     sigemptyset(&sigmask);                   // シグナル集合を空にする
-    sigaddset(&sigmask, SIGHUP);             // シグナル集合にSIGHUPをついか
+    sigaddset(&sigmask, SIGHUP);             // シグナル集合にSIGHUPを追加
     sigaddset(&sigmask, SIGUSR1);            // シグナル集合にSIGUSR1を追加
+    sigaddset(&sigmask, SIGUSR2);
     sigaddset(&sigmask, SIGALRM);
     return 0;
 }
