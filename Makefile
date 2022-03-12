@@ -10,6 +10,7 @@ OBJS = util.o \
 	   ether.o \
 	   arp.o \
 	   udp.o \
+	   tcp.o \
 
 TESTS = test/step0.exe \
 		test/step1.exe \
@@ -34,6 +35,7 @@ TESTS = test/step0.exe \
 		test/step20-1.exe \
 		test/step20-2.exe \
 		test/step21.exe \
+		test/step22.exe \
 
 CFLAGS := $(CFLAGS) -g -W -Wall -Wno-unused-parameter -iquote . 
 # -Dmacro
@@ -74,3 +76,7 @@ dev:
 	docker build . -t microps
 	docker run --privileged -it microps
 
+tap0:
+	ip tuntap add mode tap name tap0
+	ip addr add 192.0.2.1/24 dev tap0
+	ip link set tap0 up
